@@ -610,10 +610,12 @@ func (s *Server) appendAddrs(list []dns.RR, ttl uint32, ifIndex int, flushCache 
 			v6 = append(v6, a6...)
 		}
 	}
-	if ttl > 0 {
+	if ttl < 120 {
 		// RFC6762 Section 10 says A/AAAA records SHOULD
 		// use TTL of 120s, to account for network interface
 		// and IP address changes.
+		// It also says: The recommended TTL value for other Multicast DNS resource records is
+		// 75 minutes.
 		ttl = 120
 	}
 	var cacheFlushBit uint16
