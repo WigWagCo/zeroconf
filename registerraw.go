@@ -93,7 +93,7 @@ func RegisterServiceEntry(entry *ServiceEntry, ips []string, ifaces []string, no
 		}
 	}
 
-	logDebug("RegisterServiceEntry: publishing to interfaces: %+v\n", _ifaces)
+	logDebug("RegisterServiceEntry: publishing to interfaces: ", _ifaces)
 
 	s, err := newServer(_ifaces)
 	if err != nil {
@@ -178,7 +178,7 @@ func RegisterServiceEntryEachInterfaceIP(entry *ServiceEntry, ifaces []string, n
 
 	if len(ifaces) == 0 {
 		_ifaces = listMulticastInterfaces()
-		logDebug("multicast Interfaces %+v\n", _ifaces)
+		logDebug("found multicast Interfaces ", _ifaces)
 	} else {
 		for _, name := range ifaces {
 			var iface net.Interface
@@ -208,7 +208,7 @@ func RegisterServiceEntryEachInterfaceIP(entry *ServiceEntry, ifaces []string, n
 		}
 	}
 
-	logDebug("mdns orgin:%+v\n", entry)
+	//	logDebug("mdns orgin:%+v\n", entry)
 	// loop through and publish each inteface / IP combination
 	for _, interf := range _ifaces {
 		// get address(es) for each interface
@@ -219,7 +219,7 @@ func RegisterServiceEntryEachInterfaceIP(entry *ServiceEntry, ifaces []string, n
 		}
 		// create a unique entry for each interface
 		newentry := dupServiceEntryNoIps(entry)
-		logDebug("mdns duped entry: %+v\n", newentry)
+		//		logDebug("mdns duped entry: %+v\n", newentry)
 		for _, addr := range addrs {
 			switch ip := addr.(type) {
 			case *net.IPNet:
@@ -237,7 +237,7 @@ func RegisterServiceEntryEachInterfaceIP(entry *ServiceEntry, ifaces []string, n
 				}
 			}
 		}
-		logDebug("Serving out interface %s\n", interf.Name)
+		logDebug("Serving out interface ", interf.Name)
 		server, err2 := newServer([]net.Interface{interf})
 		if err2 == nil {
 			servers = append(servers, server)
