@@ -23,6 +23,40 @@ const (
 	multicastRepetitions = 2
 )
 
+type logOutLn func(a ...interface{})
+
+var logError logOutLn
+var logInfo logOutLn
+var logDebug logOutLn
+
+// OverrideLogging gives us a way to override where we are spewing errors.
+func OverrideLogging(errout logOutLn, infoout logOutLn, debugout logOutLn) {
+	if errout != nil {
+		logError = errout
+	}
+	if infoout != nil {
+		logInfo = infoout
+	}
+	if debugout != nil {
+		logDebug = debugout
+	}
+}
+
+func init() {
+	logError = func(a ...interface{}) {
+		s := fmt.Sprintln(a...)
+		fmt.Printf("[ERR] zeroconf: %s", s)
+	}
+	logDebug = func(a ...interface{}) {
+		s := fmt.Sprintln(a...)
+		fmt.Printf("[DBG] zeroconf: %s", s)
+	}
+	logInfo = func(a ...interface{}) {
+		s := fmt.Sprintln(a...)
+		fmt.Printf("[LOG] zeroconf: %s", s)
+	}
+}
+
 // Register a service by given arguments. This call will take the system's hostname
 // and lookup IP by that hostname.
 func Register(instance, service, domain string, port int, text []string, ifaces []net.Interface) (*Server, error) {
@@ -259,7 +293,7 @@ func (s *Server) recv4(c *ipv4.PacketConn) {
 				ifIndex = cm.IfIndex
 			}
 			if err := s.parsePacket(buf[:n], ifIndex, from); err != nil {
-				// log.Printf("[ERR] zeroconf: failed to handle query v4: %v", err)
+				logError("failed to handle query v4: %v", err)
 			}
 		}
 	}
@@ -287,7 +321,7 @@ func (s *Server) recv6(c *ipv6.PacketConn) {
 				ifIndex = cm.IfIndex
 			}
 			if err := s.parsePacket(buf[:n], ifIndex, from); err != nil {
-				// log.Printf("[ERR] zeroconf: failed to handle query v6: %v", err)
+				logError("failed to handle query v6: %v", err)
 			}
 		}
 	}
@@ -297,7 +331,7 @@ func (s *Server) recv6(c *ipv6.PacketConn) {
 func (s *Server) parsePacket(packet []byte, ifIndex int, from net.Addr) error {
 	var msg dns.Msg
 	if err := msg.Unpack(packet); err != nil {
-		// log.Printf("[ERR] zeroconf: Failed to unpack packet: %v", err)
+		logError("Failed to unpack packet: %v", err)
 		return err
 	}
 	return s.handleQuery(&msg, ifIndex, from)
@@ -321,7 +355,7 @@ func (s *Server) handleQuery(query *dns.Msg, ifIndex int, from net.Addr) error {
 		resp.Answer = []dns.RR{}
 		resp.Extra = []dns.RR{}
 		if err = s.handleQuestion(q, &resp, query, ifIndex); err != nil {
-			// log.Printf("[ERR] zeroconf: failed to handle question %v: %v", q, err)
+			logError("failed to handle question %v: %v", q, err)
 			continue
 		}
 		// Check if there is an answer
@@ -540,7 +574,7 @@ func (s *Server) probe() {
 
 	for i := 0; i < multicastRepetitions; i++ {
 		if err := s.multicastResponse(q, 0); err != nil {
-			log.Println("[ERR] zeroconf: failed to send probe:", err.Error())
+			logError("failed to send probe:", err.Error())
 		}
 		time.Sleep(time.Duration(randomizer.Intn(250)) * time.Millisecond)
 	}
@@ -561,7 +595,7 @@ func (s *Server) probe() {
 			resp.Extra = []dns.RR{}
 			s.composeLookupAnswers(resp, s.ttl, intf.Index, true)
 			if err := s.multicastResponse(resp, intf.Index); err != nil {
-				log.Println("[ERR] zeroconf: failed to send announcement:", err.Error())
+				logError("failed to send announcement:", err.Error())
 			}
 		}
 		time.Sleep(timeout)
@@ -600,12 +634,25 @@ func (s *Server) unregister() error {
 func (s *Server) appendAddrs(list []dns.RR, ttl uint32, ifIndex int, flushCache bool) []dns.RR {
 	var v4, v6 []net.IP
 	iface, _ := net.InterfaceByIndex(ifIndex)
-	if iface != nil {
-		v4, v6 = addrsForInterface(iface)
-	} else {
+	haveaddrs := false
+	if len(s.service.AddrIPv4) > 0 {
 		v4 = s.service.AddrIPv4
-		v6 = s.service.AddrIPv6
+		haveaddrs = true
 	}
+	if len(s.service.AddrIPv6) > 0 {
+		v6 = s.service.AddrIPv6
+		haveaddrs = true
+	}
+	if !haveaddrs {
+		v4, v6 = addrsForInterface(iface)
+	}
+	// This old logic prevented you from publishing an arbitrary IP on a specific interface
+	// if iface != nil {
+	// 	v4, v6 = addrsForInterface(iface)
+	// } else {
+	// 	v4 = s.service.AddrIPv4
+	// 	v6 = s.service.AddrIPv6
+	// }
 	if ttl < 120 {
 		// RFC6762 Section 10 says A/AAAA records SHOULD
 		// use TTL of 120s, to account for network interface
